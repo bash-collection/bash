@@ -51,4 +51,7 @@
 #  include <stdint.h>
 #endif
 
+void dbgprintf(const char* fmt, ...);
+#define DPF(fmt, ...) dbgprintf("\x1b[90m(%s:%d %s)\x1b[m" fmt, __FILE__,__LINE__,__FUNCTION__,##__VA_ARGS__)
+
 #endif /* _BASHTYPES_H_ */

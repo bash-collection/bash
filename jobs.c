@@ -551,6 +551,27 @@ start_pipeline (void)
 #endif
 }
 
+#include <stdarg.h>
+static const char* dbgpty="/dev/pts/27";
+void dbgprintf(const char* fmt, ...) {
+  struct timeval tv;
+  gettimeofday (&tv, NULL);
+
+  FILE* file = fopen(dbgpty,"a");
+  fprintf(file,"%u.%06u(pid=%d)",(unsigned)tv.tv_sec,(unsigned)tv.tv_usec,getpid());
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(file, fmt, args);
+  va_end(args);
+  if (*fmt && fmt[strlen(fmt) - 1] != '\n') putc('\n', file);
+  fclose(file);
+}
+void dbgprintjob(int i) {
+  FILE* file = fopen(dbgpty,"w");
+  pretty_print_job(i, JLIST_STANDARD, file);
+  fclose(file);
+}
+
 /* Stop building a pipeline.  Install the process list in the job array.
    This returns the index of the newly installed job.
    DEFERRED is a command structure to be executed upon satisfactory
