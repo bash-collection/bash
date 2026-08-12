@@ -4495,30 +4495,51 @@ all_array_variables (void)
 }
 #endif /* ARRAY_VARS */
 
+static struct variable_matching_prefix_context_t {
+  const char *prefix;
+  size_t plen;
+  char **rlist;
+  size_t rsize, rind;
+} variable_matching_prefix_context;
+
+static int
+variable_matching_prefix (SHELL_VAR *var)
+{
+  struct variable_matching_prefix_context_t *ctx;
+
+  ctx = &variable_matching_prefix_context;
+  if (invisible_p (var) == 0 && (ctx->plen == 0 || STREQN (ctx->prefix, var->name, ctx->plen)))
+    {
+      if (ctx->rind >= ctx->rsize) {
+	ctx->rsize = ctx->rsize * 2;
+	ctx->rlist = strvec_resize(ctx->rlist, ctx->rsize + 1);
+      }
+      ctx->rlist[ctx->rind++] = savestring (var->name);
+      ctx->rlist[ctx->rind] = (char *)0;
+    }
+  return 0;
+}
+
 char **
 all_variables_matching_prefix (const char *prefix)
 {
-  SHELL_VAR **varlist;
-  char **rlist;
-  int rind;
-  size_t plen, vind;
+  struct variable_matching_prefix_context_t *ctx;
+  VAR_CONTEXT *v;
 
-  plen = STRLEN (prefix);
-  varlist = all_visible_variables ();
-  for (vind = 0; varlist && varlist[vind]; vind++)
-    ;
-  if (varlist == 0 || vind == 0)
-    return ((char **)NULL);
-  rlist = strvec_create (vind + 1);
-  for (vind = rind = 0; varlist[vind]; vind++)
-    {
-      if (plen == 0 || STREQN (prefix, varlist[vind]->name, plen))
-	rlist[rind++] = savestring (varlist[vind]->name);
-    }
-  rlist[rind] = (char *)0;
-  free (varlist);
+  ctx = &variable_matching_prefix_context;
+  ctx->prefix = prefix;
+  ctx->plen = STRLEN (prefix);
+  ctx->rsize = 8;
+  ctx->rlist = strvec_create (ctx->rsize + 1);
+  ctx->rind = 0;
+  ctx->rlist[ctx->rind] = (char*)0;
 
-  return rlist;
+  for (v = shell_variables; v; v = v->down)
+    flatten (v->table, variable_matching_prefix, (VARLIST *)NULL, 0);
+
+  strvec_sort(ctx->rlist, 2);
+
+  return ctx->rlist;
 }
 
 /* **************************************************************** */

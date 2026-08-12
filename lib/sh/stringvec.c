@@ -182,11 +182,25 @@ strvec_strcmp (char **s1, char **s2)
 #endif /* !HAVE_STRCOLL */
 }
 
-/* Sort ARRAY, a null terminated array of pointers to strings. */
-void
-strvec_sort (char **array, int posix)
+static int
+strvec_truestrcmp (char **s1, char **s2)
 {
-  if (posix)
+  int result;
+  if ((result = (unsigned char)**s1 - (unsigned char)**s2) == 0)
+    result = strcmp (*s1, *s2);
+  return result;
+}
+
+/* Sort ARRAY, a null terminated array of pointers to strings.  If CMP_TYPE is
+   2, comparison uses strcmp, If COMP_TYPE is 1 (or aother non-zero value),
+   comparison uses strvec_posixcmp (strcoll and strcmp).  Otherwise, comparison
+   uses strvec_strcmp (strcoll or strcmp). */
+void
+strvec_sort (char **array, int cmp_type)
+{
+  if (cmp_type == 2)
+    qsort (array, strvec_len (array), sizeof (char *), (QSFUNC *)strvec_truestrcmp);
+  else if (cmp_type)
     qsort (array, strvec_len (array), sizeof (char *), (QSFUNC *)strvec_posixcmp);
   else
     qsort (array, strvec_len (array), sizeof (char *), (QSFUNC *)strvec_strcmp);
