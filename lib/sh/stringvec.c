@@ -159,7 +159,9 @@ strvec_posixcmp (char **s1, char **s2)
      return result;
 #endif
 
-  if ((result = **s1 - **s2) == 0)
+  /* Use unsigned char for comparison to be consistent with strcmp, which uses
+     unsigned char. */
+  if ((result = (unsigned char)**s1 - (unsigned char)**s2) == 0)
     result = strcmp (*s1, *s2);
 
   return (result);
@@ -175,7 +177,9 @@ strvec_strcmp (char **s1, char **s2)
 #else /* !HAVE_STRCOLL */
   int result;
 
-  if ((result = **s1 - **s2) == 0)
+  /* Use unsigned char for comparison to be consistent with strcmp, which uses
+     unsigned char. */
+  if ((result = (unsigned char)**s1 - (unsigned char)**s2) == 0)
     result = strcmp (*s1, *s2);
 
   return (result);
