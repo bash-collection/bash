@@ -83,24 +83,24 @@ static void debug_printf (const char *, ...)  __attribute__((__format__ (printf,
 
 static int it_init_joblist (ITEMLIST *, int);
 
-static int it_init_aliases (ITEMLIST *);
-static int it_init_arrayvars (ITEMLIST *);
-static int it_init_bindings (ITEMLIST *);
-static int it_init_builtins (ITEMLIST *);
-static int it_init_disabled (ITEMLIST *);
-static int it_init_enabled (ITEMLIST *);
-static int it_init_exported (ITEMLIST *);
-static int it_init_functions (ITEMLIST *);
-static int it_init_helptopics (ITEMLIST *);
-static int it_init_hostnames (ITEMLIST *);
-static int it_init_jobs (ITEMLIST *);
-static int it_init_running (ITEMLIST *);
-static int it_init_stopped (ITEMLIST *);
-static int it_init_keywords (ITEMLIST *);
-static int it_init_signals (ITEMLIST *);
-static int it_init_variables (ITEMLIST *);
-static int it_init_setopts (ITEMLIST *);
-static int it_init_shopts (ITEMLIST *);
+static int it_init_aliases (ITEMLIST *, const char *);
+static int it_init_arrayvars (ITEMLIST *, const char *);
+static int it_init_bindings (ITEMLIST *, const char *);
+static int it_init_builtins (ITEMLIST *, const char *);
+static int it_init_disabled (ITEMLIST *, const char *);
+static int it_init_enabled (ITEMLIST *, const char *);
+static int it_init_exported (ITEMLIST *, const char *);
+static int it_init_functions (ITEMLIST *, const char *);
+static int it_init_helptopics (ITEMLIST *, const char *);
+static int it_init_hostnames (ITEMLIST *, const char *);
+static int it_init_jobs (ITEMLIST *, const char *);
+static int it_init_running (ITEMLIST *, const char *);
+static int it_init_stopped (ITEMLIST *, const char *);
+static int it_init_keywords (ITEMLIST *, const char *);
+static int it_init_signals (ITEMLIST *, const char *);
+static int it_init_variables (ITEMLIST *, const char *);
+static int it_init_setopts (ITEMLIST *, const char *);
+static int it_init_shopts (ITEMLIST *, const char *);
 
 static int shouldexp_filterpat (char *);
 static char *preproc_filterpat (const char *, const char *);
@@ -211,9 +211,10 @@ set_itemlist_dirty (ITEMLIST *it)
 }
 
 void
-initialize_itemlist (ITEMLIST *itp)
+initialize_itemlist (ITEMLIST *itp, const char *hint_text)
 {
-  (*itp->list_getter) (itp);
+  itp->flags &= ~LIST_PREFIXFILTERED;
+  (*itp->list_getter) (itp, hint_text);
   itp->flags |= LIST_INITIALIZED;
   itp->flags &= ~LIST_DIRTY;
 }
@@ -325,7 +326,7 @@ completions_to_stringlist (char **matches)
    The caller is responsible for setting ITP->flags correctly. */
 
 static int
-it_init_aliases (ITEMLIST *itp)
+it_init_aliases (ITEMLIST *itp, const char *)
 {
 #ifdef ALIAS
   alias_t **alias_list;
@@ -379,7 +380,7 @@ init_itemlist_from_varlist (ITEMLIST *itp, SVFUNC *svfunc)
 }
 
 static int
-it_init_arrayvars (ITEMLIST *itp)
+it_init_arrayvars (ITEMLIST *itp, const char *)
 {
 #if defined (ARRAY_VARS)
   init_itemlist_from_varlist (itp, all_array_variables);
@@ -390,7 +391,7 @@ it_init_arrayvars (ITEMLIST *itp)
 }
 
 static int
-it_init_bindings (ITEMLIST *itp)
+it_init_bindings (ITEMLIST *itp, const char *)
 {
   char **blist;
   STRINGLIST *sl;
@@ -408,7 +409,7 @@ it_init_bindings (ITEMLIST *itp)
 }
 
 static int
-it_init_builtins (ITEMLIST *itp)
+it_init_builtins (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
   int i;
@@ -425,7 +426,7 @@ it_init_builtins (ITEMLIST *itp)
 }
 
 static int
-it_init_enabled (ITEMLIST *itp)
+it_init_enabled (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
   int i;
@@ -444,7 +445,7 @@ it_init_enabled (ITEMLIST *itp)
 }
 
 static int
-it_init_disabled (ITEMLIST *itp)
+it_init_disabled (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
   int i;
@@ -463,14 +464,14 @@ it_init_disabled (ITEMLIST *itp)
 }
 
 static int
-it_init_exported (ITEMLIST *itp)
+it_init_exported (ITEMLIST *itp, const char *)
 {
   init_itemlist_from_varlist (itp, all_exported_variables);
   return 0;
 }
 
 static int
-it_init_functions (ITEMLIST *itp)
+it_init_functions (ITEMLIST *itp, const char *)
 {
   init_itemlist_from_varlist (itp, all_visible_functions);
   return 0;
@@ -479,7 +480,7 @@ it_init_functions (ITEMLIST *itp)
 /* Like it_init_builtins, but includes everything the help builtin looks at,
    not just builtins with an active implementing function. */
 static int
-it_init_helptopics (ITEMLIST *itp)
+it_init_helptopics (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
   int i;
@@ -495,7 +496,7 @@ it_init_helptopics (ITEMLIST *itp)
 }
 
 static int
-it_init_hostnames (ITEMLIST *itp)
+it_init_hostnames (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
 
@@ -549,25 +550,25 @@ it_init_joblist (ITEMLIST *itp, int jstate)
 }
 
 static int
-it_init_jobs (ITEMLIST *itp)
+it_init_jobs (ITEMLIST *itp, const char *)
 {
   return (it_init_joblist (itp, -1));
 }
 
 static int
-it_init_running (ITEMLIST *itp)
+it_init_running (ITEMLIST *itp, const char *)
 {
   return (it_init_joblist (itp, 0));
 }
 
 static int
-it_init_stopped (ITEMLIST *itp)
+it_init_stopped (ITEMLIST *itp, const char *)
 {
   return (it_init_joblist (itp, 1));
 }
 
 static int
-it_init_keywords (ITEMLIST *itp)
+it_init_keywords (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
   int i;
@@ -585,7 +586,7 @@ it_init_keywords (ITEMLIST *itp)
 }
 
 static int
-it_init_signals (ITEMLIST *itp)
+it_init_signals (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
 
@@ -598,14 +599,14 @@ it_init_signals (ITEMLIST *itp)
 }
 
 static int
-it_init_variables (ITEMLIST *itp)
+it_init_variables (ITEMLIST *itp, const char *)
 {
   init_itemlist_from_varlist (itp, all_visible_variables);
   return 0;
 }
 
 static int
-it_init_setopts (ITEMLIST *itp)
+it_init_setopts (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
 
@@ -618,7 +619,7 @@ it_init_setopts (ITEMLIST *itp)
 }
 
 static int
-it_init_shopts (ITEMLIST *itp)
+it_init_shopts (ITEMLIST *itp, const char *)
 {
   STRINGLIST *sl;
 
@@ -642,28 +643,50 @@ gen_matches_from_itemlist (ITEMLIST *itp, const char *text)
   size_t tlen, i, n;
   char *ntxt;
 
+  ntxt = bash_dequote_text (text);
+
   if ((itp->flags & (LIST_DIRTY|LIST_DYNAMIC)) ||
       (itp->flags & LIST_INITIALIZED) == 0)
     {
       if (itp->flags & (LIST_DIRTY|LIST_DYNAMIC))
 	clean_itemlist (itp);
       if ((itp->flags & LIST_INITIALIZED) == 0)
-	initialize_itemlist (itp);
+	initialize_itemlist (itp, ntxt);
     }
   if (itp->slist == 0)
-    return ((STRINGLIST *)NULL);
-  ret = strlist_create (itp->slist->list_len);
-  sl = itp->slist;
-
-  ntxt = bash_dequote_text (text);
-  tlen = STRLEN (ntxt);
-
-  for (i = n = 0; i < sl->list_len; i++)
     {
-      if (tlen == 0 || STREQN (sl->list[i], ntxt, tlen))
-	ret->list[n++] = STRDUP (sl->list[i]);
+      FREE (ntxt);
+      return ((STRINGLIST *)NULL);
     }
-  ret->list[ret->list_len = n] = (char *)NULL;
+
+  if (itp->flags & LIST_PREFIXFILTERED)
+    {
+      /* When the items are aready filtered by itp->list_getter using the
+	 prefix text "ntxt", flag LIST_PREFIXFILTERED is set.  In this case, we
+	 can simply pass or copy the created string list. */
+      if (itp-> flags & (LIST_DONTFREEMEMBERS|LIST_DONTFREE))
+	ret = strlist_copy (itp->slist);
+      else
+	{
+	  ret = itp->slist;
+	  itp->slist = (STRINGLIST *)NULL;
+	  clean_itemlist (itp);
+	}
+    }
+  else
+    {
+      ret = strlist_create (itp->slist->list_len);
+      sl = itp->slist;
+
+      tlen = STRLEN (ntxt);
+
+      for (i = n = 0; i < sl->list_len; i++)
+	{
+	  if (tlen == 0 || STREQN (sl->list[i], ntxt, tlen))
+	    ret->list[n++] = STRDUP (sl->list[i]);
+	}
+      ret->list[ret->list_len = n] = (char *)NULL;
+    }
 
   FREE (ntxt);
   return ret;

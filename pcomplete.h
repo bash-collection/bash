@@ -88,7 +88,7 @@ typedef struct compspec {
    completions. */
 typedef struct _list_of_items {
   int flags;
-  int (*list_getter) (struct _list_of_items *);	/* function to call to get the list */
+  int (*list_getter) (struct _list_of_items *, const char *);	/* function to call to get the list */
 
   STRINGLIST *slist;
 
@@ -105,6 +105,7 @@ typedef struct _list_of_items {
 #define LIST_MUSTSORT		0x008
 #define LIST_DONTFREE		0x010
 #define LIST_DONTFREEMEMBERS	0x020
+#define LIST_PREFIXFILTERED	0x040
 
 #define EMPTYCMD	"_EmptycmD_"
 #define DEFAULTCMD	"_DefaultCmD_"
