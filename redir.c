@@ -150,35 +150,41 @@ redirection_error (REDIRECT *temp, int error, char *fn)
   /* This error can never involve NOCLOBBER */
   else if (error != NOCLOBBER_REDIRECT && temp->redirector.dest >= 0 && error == EBADF)
     {
-      /* If we're dealing with two file descriptors, we have to guess about
-         which one is invalid; in the cases of r_{duplicating,move}_input and
-         r_{duplicating,move}_output we're here because dup2() failed. */
+      char direction;
+      int move, word;
+
+      /* If we're dealing with two file descriptors, we do not know which one
+	 is invalid so show both; in the cases of r_{duplicating,move}_input
+	 and r_{duplicating,move}_output we're here because dup2() failed. */
+      direction = '\0';
+      move = word = 0;
       switch (temp->instruction)
-        {
-        case r_duplicating_input:
-        case r_duplicating_output:
-        case r_move_input:
-        case r_move_output:
-	  filename = allocname = itos (temp->redirectee.dest);
-	  break;
-	case r_duplicating_input_word:
-	case r_move_input_word:
-	  if (temp->redirector.dest == 0)	/* Guess */
-	    filename = temp->redirectee.filename->word;	/* XXX */
+	{
+	case r_duplicating_input: direction = '<'; break;
+	case r_duplicating_output: direction = '>'; break;
+	case r_move_input: direction = '<'; move = 1; break;
+	case r_move_output: direction = '>'; move = 1; break;
+	case r_duplicating_input_word: direction = '<'; word = 1; break;
+	case r_duplicating_output_word: direction = '>'; word = 1; break;
+	case r_move_input_word: direction = '<'; move = 1; word = 1; break;
+	case r_move_output_word: direction = '>'; move = 1; word = 1; break;
+	}
+
+      if (direction)
+	{
+	  char *fd1, *fd2;
+	  fd1 = itos (temp->redirector.dest);
+	  if (word)
+	    fd2 = redirection_expand (temp->redirectee.filename);
 	  else
-	    filename = allocname = itos (temp->redirector.dest);
-	  break;
-	case r_duplicating_output_word:
-	case r_move_output_word:
-	  if (temp->redirector.dest == 1)	/* Guess */
-	    filename = temp->redirectee.filename->word;	/* XXX */
-	  else
-	    filename = allocname = itos (temp->redirector.dest);
-	  break;
-	default:
-	  filename = allocname = itos (temp->redirector.dest);
-	  break;
-        }
+	    fd2 = itos (temp->redirectee.dest);
+	  filename = allocname = (char *)xmalloc (strlen (fd1) + strlen (fd2) + 4);
+	  sprintf (filename, "%s%c&%s%c", fd1, direction, fd2, move ? '-' : '\0');
+	  free (fd2);
+	  free (fd1);
+	}
+      else
+	filename = allocname = itos (temp->redirector.dest);
     }
 #endif
   else if (fn)
