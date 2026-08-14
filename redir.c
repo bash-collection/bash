@@ -162,12 +162,14 @@ redirection_error (REDIRECT *temp, int error, char *fn)
 	  filename = allocname = itos (temp->redirectee.dest);
 	  break;
 	case r_duplicating_input_word:
+	case r_move_input_word:
 	  if (temp->redirector.dest == 0)	/* Guess */
 	    filename = temp->redirectee.filename->word;	/* XXX */
 	  else
 	    filename = allocname = itos (temp->redirector.dest);
 	  break;
 	case r_duplicating_output_word:
+	case r_move_output_word:
 	  if (temp->redirector.dest == 1)	/* Guess */
 	    filename = temp->redirectee.filename->word;	/* XXX */
 	  else
