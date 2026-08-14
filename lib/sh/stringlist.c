@@ -47,7 +47,7 @@ strlist_create (size_t n)
     {
       ret->list = strvec_create (n+1);
       ret->list_size = n;
-      for (i = 0; i < n; i++)
+      for (i = 0; i <= n; i++)
 	ret->list[i] = (char *)NULL;
     }
   else
@@ -168,7 +168,7 @@ strlist_append (STRINGLIST *m1, STRINGLIST *m2)
 
   if (len2)
     {
-      m1 = strlist_resize (m1, len1 + len2 + 1);
+      m1 = strlist_resize (m1, len1 + len2);
       for (i = 0, n = len1; i < len2; i++, n++)
 	m1->list[n] = STRDUP (m2->list[i]);
       m1->list[n] = (char *)NULL;

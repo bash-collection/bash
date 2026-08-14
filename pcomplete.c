@@ -311,27 +311,13 @@ STRINGLIST *
 completions_to_stringlist (char **matches)
 {
   STRINGLIST *sl;
-  int i, n;
-  size_t mlen;
 
-  mlen = (matches == 0) ? 0 : strvec_len (matches);
-  sl = strlist_create (mlen + 1);
-
+  sl = strlist_create (0);
   if (matches == 0 || matches[0] == 0)
     return sl;
 
-  if (matches[1] == 0)
-    {
-      sl->list[0] = STRDUP (matches[0]);
-      sl->list[sl->list_len = 1] = (char *)NULL;
-      return sl;
-    }
-
-  for (i = 1, n = 0; i < mlen; i++, n++)
-    sl->list[n] = STRDUP (matches[i]);
-  sl->list_len = n;
-  sl->list[n] = (char *)NULL;
-
+  sl->list = strvec_copy (matches);
+  sl->list_len = sl->list_size = strvec_len (matches);
   return sl;
 }
 
@@ -355,7 +341,7 @@ it_init_aliases (ITEMLIST *itp)
     }
   for (n = 0; alias_list[n]; n++)
     ;
-  sl = strlist_create (n+1);
+  sl = strlist_create (n);
   for (i = 0; i < n; i++)
     sl->list[i] = STRDUP (alias_list[i]->name);
   sl->list[n] = (char *)NULL;
@@ -666,7 +652,7 @@ gen_matches_from_itemlist (ITEMLIST *itp, const char *text)
     }
   if (itp->slist == 0)
     return ((STRINGLIST *)NULL);
-  ret = strlist_create (itp->slist->list_len+1);
+  ret = strlist_create (itp->slist->list_len);
   sl = itp->slist;
 
   ntxt = bash_dequote_text (text);
@@ -881,7 +867,7 @@ gen_wordlist_matches (COMPSPEC *cs, const char *text)
   dispose_words (l);
 
   nw = wlist_length (l2);
-  sl = strlist_create (nw + 1);
+  sl = strlist_create (nw);
 
   ntxt = bash_dequote_text (text);
   tlen = STRLEN (ntxt);
