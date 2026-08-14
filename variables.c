@@ -4496,29 +4496,32 @@ all_array_variables (void)
 #endif /* ARRAY_VARS */
 
 static struct {
+  sh_var_map_func_t *func;
   const char *prefix;
   size_t plen;
-} variable_matching_prefix_context;
+} name_matching_prefix_context;
 
 static int
-variable_matching_prefix (SHELL_VAR *var)
+name_matching_prefix (SHELL_VAR *var)
 {
-  const char *prefix = variable_matching_prefix_context.prefix;
-  size_t plen = variable_matching_prefix_context.plen;
-  return (invisible_p (var) == 0 && (plen == 0 || STREQN (prefix, var->name, plen)));
+  sh_var_map_func_t *func = name_matching_prefix_context.func;
+  const char *prefix = name_matching_prefix_context.prefix;
+  size_t plen = name_matching_prefix_context.plen;
+  return func(var) && (plen == 0 || STREQN (prefix, var->name, plen));
 }
 
-char **
-all_variables_matching_prefix (const char *prefix)
+static char **
+all_names_matching_prefix (SHELL_VAR ** (*apply)(sh_var_map_func_t *), sh_var_map_func_t *func, const char *prefix)
 {
   SHELL_VAR **varlist;
   char **rlist;
   int rind;
   size_t vind;
 
-  variable_matching_prefix_context.prefix = prefix;
-  variable_matching_prefix_context.plen = STRLEN (prefix);
-  varlist = vapply (variable_matching_prefix);
+  name_matching_prefix_context.func = func;
+  name_matching_prefix_context.prefix = prefix;
+  name_matching_prefix_context.plen = STRLEN (prefix);
+  varlist = apply (name_matching_prefix);
   for (vind = 0; varlist && varlist[vind]; vind++)
     ;
   if (varlist == 0 || vind == 0)
@@ -4530,6 +4533,30 @@ all_variables_matching_prefix (const char *prefix)
   free (varlist);
 
   return rlist;
+}
+
+char **
+all_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_var, prefix);
+}
+
+char **
+all_exported_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_and_exported, prefix);
+}
+
+char **
+all_array_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_array_vars, prefix);
+}
+
+char **
+all_functions_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (fapply, visible_var, prefix);
 }
 
 /* **************************************************************** */

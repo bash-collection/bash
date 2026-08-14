@@ -72,7 +72,7 @@
 #endif
 #define STRDUP(x)	((x) ? savestring (x) : (char *)NULL)
 
-typedef SHELL_VAR **SVFUNC (void);
+typedef char **STRVECFUNC (const char *);
 
 extern STRING_INT_ALIST word_token_alist[];
 extern char *signal_names[];
@@ -105,7 +105,7 @@ static int it_init_shopts (ITEMLIST *, const char *);
 static int shouldexp_filterpat (char *);
 static char *preproc_filterpat (const char *, const char *);
 
-static void init_itemlist_from_varlist (ITEMLIST *, SVFUNC *);
+static void init_itemlist_from_strvec (ITEMLIST *, STRVECFUNC *, const char *);
 
 static STRINGLIST *gen_matches_from_itemlist (ITEMLIST *, const char *);
 static STRINGLIST *gen_action_completions (COMPSPEC *, const char *);
@@ -356,34 +356,30 @@ it_init_aliases (ITEMLIST *itp, const char *)
 }
 
 static void
-init_itemlist_from_varlist (ITEMLIST *itp, SVFUNC *svfunc)
+init_itemlist_from_strvec (ITEMLIST *itp, STRVECFUNC *strvecfunc, const char *prefix)
 {
-  SHELL_VAR **vlist;
+  char **svec;
   STRINGLIST *sl;
-  int i;
-  size_t n;
 
-  vlist = (*svfunc) ();
-  if (vlist == 0)
+  svec = (*strvecfunc) (prefix);
+  if (svec == 0)
     {
       itp->slist = (STRINGLIST *)NULL;
       return;
-    }    
-  for (n = 0; vlist[n]; n++)
-    ;
-  sl = strlist_create (n+1);
-  for (i = 0; i < n; i++)
-    sl->list[i] = savestring (vlist[i]->name);
-  sl->list[sl->list_len = n] = (char *)NULL;
+    }
+
+  sl = strlist_create (0);
+  sl->list = svec;
+  sl->list_len = sl->list_size = strvec_len(svec);
   itp->slist = sl;
-  free (vlist);
+  itp->flags |= LIST_PREFIXFILTERED;
 }
 
 static int
-it_init_arrayvars (ITEMLIST *itp, const char *)
+it_init_arrayvars (ITEMLIST *itp, const char *prefix)
 {
 #if defined (ARRAY_VARS)
-  init_itemlist_from_varlist (itp, all_array_variables);
+  init_itemlist_from_strvec (itp, all_array_variables_matching_prefix, prefix);
   return 1;
 #else
   return 0;
@@ -464,16 +460,16 @@ it_init_disabled (ITEMLIST *itp, const char *)
 }
 
 static int
-it_init_exported (ITEMLIST *itp, const char *)
+it_init_exported (ITEMLIST *itp, const char *prefix)
 {
-  init_itemlist_from_varlist (itp, all_exported_variables);
+  init_itemlist_from_strvec (itp, all_exported_variables_matching_prefix, prefix);
   return 0;
 }
 
 static int
-it_init_functions (ITEMLIST *itp, const char *)
+it_init_functions (ITEMLIST *itp, const char *prefix)
 {
-  init_itemlist_from_varlist (itp, all_visible_functions);
+  init_itemlist_from_strvec (itp, all_functions_matching_prefix, prefix);
   return 0;
 }
 
@@ -599,9 +595,9 @@ it_init_signals (ITEMLIST *itp, const char *)
 }
 
 static int
-it_init_variables (ITEMLIST *itp, const char *)
+it_init_variables (ITEMLIST *itp, const char *prefix)
 {
-  init_itemlist_from_varlist (itp, all_visible_variables);
+  init_itemlist_from_strvec (itp, all_variables_matching_prefix, prefix);
   return 0;
 }
 
