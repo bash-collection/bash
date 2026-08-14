@@ -194,3 +194,5 @@
 
 /* If you don't want bash to provide a default mail file to check. */
 /* #undef DEFAULT_MAIL_DIRECTORY */
+
+#define INTERACTIVE_SHELL_PRINT_LINENO

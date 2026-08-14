@@ -77,7 +77,11 @@ error_prolog (int print_lineno)
   int line;
 
   ename = get_name_for_error ();
+#ifdef INTERACTIVE_SHELL_PRINT_LINENO
+  line = print_lineno ? executing_line_number () : -1;
+#else
   line = (print_lineno && interactive_shell == 0) ? executing_line_number () : -1;
+#endif
 
   if (line > 0)
     fprintf (stderr, "%s:%s%d: ", ename, gnu_error_format ? "" : _(" line "), line);
@@ -96,7 +100,9 @@ get_name_for_error (void)
 #endif
 
   name = (char *)NULL;
+#ifndef INTERACTIVE_SHELL_PRINT_LINENO
   if (interactive_shell == 0)
+#endif
     {
 #if defined (ARRAY_VARS)
       bash_source_v = find_variable ("BASH_SOURCE");

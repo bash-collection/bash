@@ -87,7 +87,9 @@ builtin_error_prolog (void)
   name = get_name_for_error ();
   fprintf (stderr, "%s: ", name);
 
+#ifndef INTERACTIVE_SHELL_PRINT_LINENO
   if (interactive_shell == 0)
+#endif
     fprintf (stderr, _("line %d: "), executing_line_number ());
 
   if (this_command_name && *this_command_name)
