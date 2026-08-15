@@ -329,6 +329,9 @@ extern SHELL_VAR **all_local_variables (int);
 extern SHELL_VAR **all_array_variables (void);
 #endif
 extern char **all_variables_matching_prefix (const char *);
+extern char **all_exported_variables_matching_prefix (const char *);
+extern char **all_array_variables_matching_prefix (const char *);
+extern char **all_functions_matching_prefix (const char *);
 
 extern char **make_var_array (HASH_TABLE *);
 extern char **add_or_supercede_exported_var (char *, int);

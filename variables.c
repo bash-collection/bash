@@ -4495,30 +4495,68 @@ all_array_variables (void)
 }
 #endif /* ARRAY_VARS */
 
-char **
-all_variables_matching_prefix (const char *prefix)
+static struct {
+  sh_var_map_func_t *func;
+  const char *prefix;
+  size_t plen;
+} name_matching_prefix_context;
+
+static int
+name_matching_prefix (SHELL_VAR *var)
+{
+  sh_var_map_func_t *func = name_matching_prefix_context.func;
+  const char *prefix = name_matching_prefix_context.prefix;
+  size_t plen = name_matching_prefix_context.plen;
+  return func(var) && (plen == 0 || STREQN (prefix, var->name, plen));
+}
+
+static char **
+all_names_matching_prefix (SHELL_VAR ** (*apply)(sh_var_map_func_t *), sh_var_map_func_t *func, const char *prefix)
 {
   SHELL_VAR **varlist;
   char **rlist;
   int rind;
-  size_t plen, vind;
+  size_t vind;
 
-  plen = STRLEN (prefix);
-  varlist = all_visible_variables ();
+  name_matching_prefix_context.func = func;
+  name_matching_prefix_context.prefix = prefix;
+  name_matching_prefix_context.plen = STRLEN (prefix);
+  varlist = apply (name_matching_prefix);
   for (vind = 0; varlist && varlist[vind]; vind++)
     ;
   if (varlist == 0 || vind == 0)
     return ((char **)NULL);
   rlist = strvec_create (vind + 1);
   for (vind = rind = 0; varlist[vind]; vind++)
-    {
-      if (plen == 0 || STREQN (prefix, varlist[vind]->name, plen))
-	rlist[rind++] = savestring (varlist[vind]->name);
-    }
+    rlist[rind++] = savestring (varlist[vind]->name);
   rlist[rind] = (char *)0;
   free (varlist);
 
   return rlist;
+}
+
+char **
+all_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_var, prefix);
+}
+
+char **
+all_exported_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_and_exported, prefix);
+}
+
+char **
+all_array_variables_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (vapply, visible_array_vars, prefix);
+}
+
+char **
+all_functions_matching_prefix (const char *prefix)
+{
+  return all_names_matching_prefix (fapply, visible_var, prefix);
 }
 
 /* **************************************************************** */
