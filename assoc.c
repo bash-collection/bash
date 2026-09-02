@@ -82,6 +82,20 @@ assoc_insert (HASH_TABLE *hash, char *key, char *value)
   return (0);
 }
 
+static int
+assoc_merge_inserter (BUCKET_CONTENTS *item, void *arg)
+{
+  HASH_TABLE *dst = (HASH_TABLE *)arg;
+  assoc_insert (dst, savestring (item->key), (char *)item->data);
+  return 0;
+}
+
+void
+assoc_merge (HASH_TABLE *dst, HASH_TABLE *src)
+{
+  hash_walk_arg (src, assoc_merge_inserter, (void *)dst);
+}
+
 /* Like assoc_insert, but returns b->data instead of freeing it */
 PTR_T
 assoc_replace (HASH_TABLE *hash, char *key, char *value)
