@@ -394,7 +394,7 @@ hash_dispose (HASH_TABLE *table)
 /* Call (*FUNC) for each element in TABLE. If FUNC returns < 0, abort the
    walk. */
 void
-hash_walk (HASH_TABLE *table, hash_wfunc *func)
+hash_walk_arg (HASH_TABLE *table, hash_wafunc *func, void *arg)
 {
   register int i;
   BUCKET_CONTENTS *item;
@@ -405,9 +405,22 @@ hash_walk (HASH_TABLE *table, hash_wfunc *func)
   for (i = 0; i < table->nbuckets; i++)
     {
       for (item = hash_items (i, table); item; item = item->next)
-	if ((*func) (item) < 0)
+	if ((*func) (item, arg) < 0)
 	  return;
     }
+}
+
+static int
+hash_walk_adapter (BUCKET_CONTENTS *item, void *arg)
+{
+  hash_wfunc *func = (hash_wfunc *)arg;
+  return (*func) (item);
+}
+
+void
+hash_walk (HASH_TABLE *table, hash_wfunc *func)
+{
+  hash_walk_arg (table, hash_walk_adapter, (void *)func);
 }
 
 #if defined (DEBUG) || defined (TEST_HASHING)
