@@ -215,6 +215,61 @@ make_array_variable_value (SHELL_VAR *entry, arrayind_t ind, const char *key, co
   return newval;
 }
 
+/* Calculate the value of an associative-array element after assignment with a
+   compound assignment.  ENTRY contains the entry for the associative-array
+   variable with the old contents before starting the compound assignment.
+   NHASH contains new key-value pairs that will be inserted finally.  KEY and
+   RHS specify the key of the target element and the right-hand side of the
+   assignment, respectively, as in `[KEY]=RHS' or `[KEY]+=RHS'.  FLAGS contain
+   the ASS_* flags of the element assignment.  COMPOUND_APPEND is non-zero for
+   the compound assignment of the form `assoc+=(...)', or 0 for the form
+   `assoc=(...)'. */
+static char *
+make_assoc_variable_value (SHELL_VAR *entry, HASH_TABLE *nhash, const char *key, const char *rhs, int flags, int compound_append)
+{
+  SHELL_VAR *dentry;
+  char *value;
+  BUCKET_CONTENTS *b;
+
+  /* For [KEY]+=RHS, RHS should be added to the present value, while expansions
+     and arithmetic evaluations still reference the old contents of the
+     associative array variable.  */
+  if (flags & ASS_APPEND)
+    {
+      value = 0;
+      if (nhash && (b = hash_search (key, nhash, 0)) != 0)
+	{
+	  /* If an existing value is found in NHASH (i.e., the currently
+	     constructed hash table), it is the latest value associated with
+	     the key.  RHS should be added to it. */
+	  value = (char *)b->data;
+	}
+      else if (compound_append)
+	{
+	  /* If an existing value is not found in NHASH, it implies that we
+	     have not yet modified the value in the present compound
+	     assignment.  In this case, we reference the old contents only when
+	     the present compound assignment has the form of a+=(...), i.e.,
+	     when COMPOUND_APPEND is non-zero. */
+	  value = assoc_reference (assoc_cell (entry), key);
+	}
+      if (value == 0)
+	value = "";
+
+      dentry = (SHELL_VAR *)xmalloc (sizeof (SHELL_VAR));
+      dentry->name = savestring (entry->name);
+      dentry->value = savestring (value);
+      dentry->exportstr = 0;
+      dentry->attributes = entry->attributes & ~(att_array|att_assoc|att_exported);
+      value = make_variable_value (dentry, rhs, flags);
+      dispose_variable (dentry);
+      return value;
+    }
+
+  /* Otherwise, we fall back to make_array_variable_value (). */
+  return make_array_variable_value (entry, 0, key, rhs, flags);
+}
+
 /* Assign HASH[KEY]=VALUE according to FLAGS. ENTRY is an associative array
    variable; HASH is the hash table to assign into. HASH may or may not be
    the hash table associated with ENTRY; if it's not, the caller takes care
@@ -222,12 +277,12 @@ make_array_variable_value (SHELL_VAR *entry, arrayind_t ind, const char *key, co
    XXX - make sure that any dynamic associative array variables recreate the
    hash table on each assignment. BASH_CMDS and BASH_ALIASES already do this */
 static SHELL_VAR *
-bind_assoc_var_internal (SHELL_VAR *entry, HASH_TABLE *hash, char *key, const char *value, int flags)
+bind_assoc_var_internal (SHELL_VAR *entry, HASH_TABLE *hash, char *key, const char *value, int flags, int compound_append)
 {
   char *newval;
 
   /* Use the existing array contents to expand the value */
-  newval = make_array_variable_value (entry, 0, key, value, flags);
+  newval = make_assoc_variable_value (entry, hash, key, value, flags, compound_append);
 
   if (entry->assign_func)
     {
@@ -322,7 +377,7 @@ bind_assoc_variable (SHELL_VAR *entry, const char *name, char *key, const char *
       return (entry);
     }
 
-  return (bind_assoc_var_internal (entry, assoc_cell (entry), key, value, flags));
+  return (bind_assoc_var_internal (entry, assoc_cell (entry), key, value, flags, 0));
 }
 
 inline void
@@ -679,7 +734,7 @@ assign_assoc_from_kvlist (SHELL_VAR *var, WORD_LIST *nlist, HASH_TABLE *h, int f
 	  aval[0] = '\0';	/* like do_assignment_internal */
 	}
 
-      bind_assoc_var_internal (var, h, akey, aval, flags);
+      bind_assoc_var_internal (var, h, akey, aval, flags, flags & ASS_APPEND);
 
       free (aval);
     }
@@ -731,7 +786,7 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
   char *akey;
 
   a = (var && array_p (var)) ? array_cell (var) : (ARRAY *)0;
-  nhash = h = (var && assoc_p (var)) ? assoc_cell (var) : (HASH_TABLE *)0;
+  h = (var && assoc_p (var)) ? assoc_cell (var) : (HASH_TABLE *)0;
 
   akey = (char *)0;
   ind = 0;
@@ -740,13 +795,9 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
 
   /* Now that we are ready to assign values to the array, kill the existing
      value. */
-  if ((flags & ASS_APPEND) == 0)
-    {
-      if (a && array_p (var))
-	array_flush (a);
-      else if (h && assoc_p (var))
-	nhash = assoc_create (h->nbuckets);
-    }
+  if (a && (flags & ASS_APPEND) == 0)
+    array_flush (a);
+  nhash = h ? assoc_create (h->nbuckets) : (HASH_TABLE *)0;
 
 #if ASSOC_KVPAIR_ASSIGNMENT
   if (assoc_p (var) && kvpair_assignment_p (nlist))
@@ -899,7 +950,7 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
       if (integer_p (var))
 	this_command_name = 0;	/* no command name for errors */
       if (assoc_p (var))
-	bind_assoc_var_internal (var, nhash, akey, val, iflags);
+	bind_assoc_var_internal (var, nhash, akey, val, iflags, flags & ASS_APPEND);
       else
 	bind_array_var_internal (var, ind, akey, val, iflags);
       last_ind++;
@@ -909,11 +960,18 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
 	free (val);
     }
 
-  if (assoc_p (var) && nhash && nhash != h)
+  if (assoc_p (var))
     {
-      h = assoc_cell (var);
-      var_setassoc (var, nhash);
-      assoc_dispose (h);
+      if (h && (flags & ASS_APPEND))
+	{
+	  assoc_merge (h, nhash);
+	  assoc_dispose (nhash);
+	}
+      else
+	{
+	  var_setassoc (var, nhash);
+	  assoc_dispose (h);
+	}
     }
 
 #if ARRAY_EXPORT

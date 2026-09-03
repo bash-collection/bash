@@ -42,6 +42,7 @@ typedef struct hash_table {
 } HASH_TABLE;
 
 typedef int hash_wfunc (BUCKET_CONTENTS *);
+typedef int hash_wafunc (BUCKET_CONTENTS *, void *);
 
 /* Operations on tables as a whole */
 extern HASH_TABLE *hash_create (int);
@@ -49,6 +50,7 @@ extern HASH_TABLE *hash_copy (HASH_TABLE *, sh_copy_func_t *);
 extern void hash_flush (HASH_TABLE *, sh_free_func_t *);
 extern void hash_dispose (HASH_TABLE *);
 extern void hash_walk (HASH_TABLE *, hash_wfunc *);
+extern void hash_walk_arg (HASH_TABLE *, hash_wafunc *, void *);
 
 /* Operations to extract information from or pieces of tables */
 extern int hash_bucket (const char *, HASH_TABLE *);
