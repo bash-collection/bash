@@ -215,6 +215,70 @@ make_array_variable_value (SHELL_VAR *entry, arrayind_t ind, const char *key, co
   return newval;
 }
 
+/* Calculate the new value of an associative-array element for a unit compound
+   assignment `[KEY]=RHS' or `[KEY]+=RHS' and store the key-value pair into
+   NHASH.  ENTRY specifies the associative-array variable with the old contents
+   (before starting the present compound assignment).  NHASH contains already
+   generated key-value pairs that will be inserted later.  KEY is directly
+   stored into NHASH, so the ownership of KEY is moved to NHASH; the caller
+   should not free it.  IFLAGS and CFLAGS contain the ASS_* flags of the unit
+   assignment (`[key]=rhs' or `[key]+=rhs') and the compound assignment
+   (`assoc=(...)' or `assoc+=(...)'), respectively. */
+static void
+make_assoc_var_kvpair (SHELL_VAR *entry, HASH_TABLE *nhash, char *key, const char *rhs, int iflags, int cflags)
+{
+  char *value;
+
+  /* For [KEY]+=RHS, RHS should be added to the present value, while expansions
+     and arithmetic evaluations still reference the old contents of the
+     associative array variable.  */
+  if (iflags & ASS_APPEND)
+    {
+      SHELL_VAR *dentry;
+      BUCKET_CONTENTS *b;
+
+      value = NULL;
+      if ((b = hash_search (key, nhash, 0)) != NULL)
+	{
+	  /* If an existing value is found in NHASH (i.e., the currently
+	     constructed hash table), it is the latest value associated with
+	     the key.  RHS should be added to it. */
+	  /* XXX - In the case of a dynamic associative array,
+	     ENTRY->assign_func might modify the actual value, but this
+	     implementation does not consider it.  For example,
+	     `dyn=([key]="v1" [key]+="v2")' is equivalent to `dyn[key]="v1v2"'
+	     in this implementation, and the result can be different from
+	     `dyn[key]="v1"; dyn[key]+="v2"', where `v1' might be modified
+	     before appending `v2'. */
+	  value = (char *)b->data;
+	}
+      else if (cflags & ASS_APPEND)
+	{
+	  /* If an existing value is not found in NHASH, it implies that we
+	     have not yet modified the value in the present compound
+	     assignment.  In this case, we reference the old contents only when
+	     the present compound assignment has the form of a+=(...), i.e.,
+	     when CFLAGS has flag ASS_APPEND. */
+	  value = assoc_reference (assoc_cell (entry), key);
+	}
+      if (value == NULL)
+	value = "";
+
+      dentry = (SHELL_VAR *)xmalloc (sizeof (SHELL_VAR));
+      dentry->name = savestring (entry->name);
+      dentry->value = savestring (value);
+      dentry->exportstr = NULL;
+      dentry->attributes = entry->attributes & ~(att_array|att_assoc|att_exported);
+      value = make_variable_value (dentry, rhs, iflags);
+      dispose_variable (dentry);
+    }
+  else
+    value = make_array_variable_value (entry, 0, key, rhs, iflags);
+
+  assoc_insert (nhash, key, value);
+  FREE (value);
+}
+
 /* Assign HASH[KEY]=VALUE according to FLAGS. ENTRY is an associative array
    variable; HASH is the hash table to assign into. HASH may or may not be
    the hash table associated with ENTRY; if it's not, the caller takes care
@@ -241,8 +305,53 @@ bind_assoc_var_internal (SHELL_VAR *entry, HASH_TABLE *hash, char *key, const ch
 
   VUNSETATTR (entry, att_invisible);	/* no longer invisible */
 
-  /* check mark_modified_variables if we ever want to export array vars */
+  /* XXX - check mark_modified_vars if we ever want to export array vars */
   return (entry);
+}
+
+static int
+bind_assoc_kvpair_dynamic (BUCKET_CONTENTS *item, void *arg)
+{
+  SHELL_VAR *var = (SHELL_VAR *)arg;
+  (*var->assign_func) (var, (char *)item->data, 0, item->key);
+  VUNSETATTR (var, att_invisible);	/* no longer invisible */
+  return 0;
+}
+
+/* Assign key-value pairs generated for a compound assignment according to
+   FLAGS. ENTRY is an associative array variable; NHASH is the hash table
+   containing the new key-value pairs.
+   XXX - make sure that any dynamic associative array variables recreate the
+   hash table on each assignment. BASH_CMDS and BASH_ALIASES already do this */
+static void
+bind_assoc_kvpairs (SHELL_VAR *var, HASH_TABLE *nhash, int flags)
+{
+  if (HASH_ENTRIES (nhash) == 0)
+    return;
+
+  if (var->assign_func)
+    {
+      hash_walk_arg (nhash, bind_assoc_kvpair_dynamic, var);
+      assoc_dispose (nhash);
+    }
+  else
+    {
+      HASH_TABLE *h;
+      if ((flags & ASS_APPEND) && (h = assoc_cell (var)) != NULL && HASH_ENTRIES (h) > 0)
+	{
+	  assoc_merge (h, nhash);
+	  assoc_dispose (nhash);
+	}
+      else
+	{
+	  var_setassoc (var, nhash);
+	  if (h != NULL)
+	    assoc_dispose (h);
+	}
+      VUNSETATTR (var, att_invisible);	/* no longer invisible */
+    }
+
+  /* XXX - check mark_modified_vars if we ever want to export array vars */
 }
 
 /* Perform ENTRY[IND]=VALUE or ENTRY[KEY]=VALUE. This is not called for every
@@ -264,7 +373,7 @@ bind_array_var_internal (SHELL_VAR *entry, arrayind_t ind, char *key, const char
 
   VUNSETATTR (entry, att_invisible);	/* no longer invisible */
 
-  /* check mark_modified_variables if we ever want to export array vars */
+  /* XXX - check mark_modified_vars if we ever want to export array vars */
   return (entry);
 }
 
@@ -652,8 +761,10 @@ assign_assoc_from_kvlist (SHELL_VAR *var, WORD_LIST *nlist, HASH_TABLE *h, int f
 {
   WORD_LIST *list, *explist;
   char *akey, *aval, *k, *v;
+  int iflags;
 
   explist = split_kvpair_assignments ? expand_words_no_vars (nlist) : nlist;
+  iflags = flags & ~ASS_APPEND;
   for (list = explist; list; list = list->next)
     {
       k = list->word->word;
@@ -679,7 +790,7 @@ assign_assoc_from_kvlist (SHELL_VAR *var, WORD_LIST *nlist, HASH_TABLE *h, int f
 	  aval[0] = '\0';	/* like do_assignment_internal */
 	}
 
-      bind_assoc_var_internal (var, h, akey, aval, flags);
+      make_assoc_var_kvpair (var, h, akey, aval, iflags, flags);
 
       free (aval);
     }
@@ -710,7 +821,7 @@ expand_and_quote_kvpair_word (const char *w)
   return r;
 }
 #endif
-     
+
 /* Callers ensure that VAR is not NULL. Associative array assignments have not
    been expanded when this is called, or have been expanded once and single-
    quoted, so we don't have to scan through an unquoted expanded subscript to
@@ -731,7 +842,7 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
   char *akey;
 
   a = (var && array_p (var)) ? array_cell (var) : (ARRAY *)0;
-  nhash = h = (var && assoc_p (var)) ? assoc_cell (var) : (HASH_TABLE *)0;
+  h = (var && assoc_p (var)) ? assoc_cell (var) : (HASH_TABLE *)0;
 
   akey = (char *)0;
   ind = 0;
@@ -740,25 +851,15 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
 
   /* Now that we are ready to assign values to the array, kill the existing
      value. */
-  if ((flags & ASS_APPEND) == 0)
-    {
-      if (a && array_p (var))
-	array_flush (a);
-      else if (h && assoc_p (var))
-	nhash = assoc_create (h->nbuckets);
-    }
+  if (a && (flags & ASS_APPEND) == 0)
+    array_flush (a);
+  nhash = assoc_p (var) ? assoc_create (DEFAULT_HASH_BUCKETS) : (HASH_TABLE *)0;
 
 #if ASSOC_KVPAIR_ASSIGNMENT
   if (assoc_p (var) && kvpair_assignment_p (nlist))
     {
-      iflags = flags & ~ASS_APPEND;
-      assign_assoc_from_kvlist (var, nlist, nhash, iflags);
-      if (nhash && nhash != h)
-	{
-	  h = assoc_cell (var);
-	  var_setassoc (var, nhash);
-	  assoc_dispose (h);
-	}
+      assign_assoc_from_kvlist (var, nlist, nhash, flags);
+      bind_assoc_kvpairs (var, nhash, flags);
       VSETATTR(var, att_assoc);		/* paranoia; could have been unset */
       return 1;		/* XXX - check return value */
     }
@@ -899,7 +1000,7 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
       if (integer_p (var))
 	this_command_name = 0;	/* no command name for errors */
       if (assoc_p (var))
-	bind_assoc_var_internal (var, nhash, akey, val, iflags);
+	make_assoc_var_kvpair (var, nhash, akey, val, iflags, flags);
       else
 	bind_array_var_internal (var, ind, akey, val, iflags);
       last_ind++;
@@ -909,12 +1010,8 @@ assign_compound_array_list (SHELL_VAR *var, WORD_LIST *nlist, int flags)
 	free (val);
     }
 
-  if (assoc_p (var) && nhash && nhash != h)
-    {
-      h = assoc_cell (var);
-      var_setassoc (var, nhash);
-      assoc_dispose (h);
-    }
+  if (assoc_p (var))
+    bind_assoc_kvpairs (var, nhash, flags);
 
 #if ARRAY_EXPORT
   if (var && exported_p (var))

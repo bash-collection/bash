@@ -42,6 +42,7 @@ extern void assoc_flush (HASH_TABLE *);
 extern int assoc_insert (HASH_TABLE *, char *, char *);
 extern PTR_T assoc_replace (HASH_TABLE *, char *, char *);
 extern void assoc_remove (HASH_TABLE *, const char *);
+extern void assoc_merge (HASH_TABLE *, HASH_TABLE *);
 
 extern char *assoc_reference (HASH_TABLE *, const char *);
 
